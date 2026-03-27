@@ -69,6 +69,8 @@ class Meteor(pygame.sprite.Sprite):
         self.speed = random.randint(400, 500)
         self.rotation_speed = random.randint(40, 80)
         self.rotation = 0
+        base_speed = random.randint(400, 500)
+        self.speed = base_speed * meteor_speed_multiplier
 
     def update(self, dt):
         self.rect.center += self.direction * self.speed *  dt
@@ -96,8 +98,7 @@ class AnimatedExplosion(pygame.sprite.Sprite):
             self.kill()
 
 def collision():
-    global running
-
+    global running, score, level, meteor_speed_multiplier, level_up_text, level_up_start_time
     collision_sprites = pygame.sprite.spritecollide(player, meteor_sprites, True, pygame.sprite.collide_mask)
     if collision_sprites:
         running = False
@@ -107,13 +108,46 @@ def collision():
         if collided_sprites:
             laser.kill()
             AnimatedExplosion(explosion_frames, laser.rect.midtop, all_sprites)
+
+            score += 1
+
+            if score == 3:
+                level = 2
+                meteor_speed_multiplier = 1.3
+                pygame.time.set_timer(meteor_event, 350)
+                level_up_text = f"LEVEL {level}!"
+                level_up_start_time = pygame.time.get_ticks()
+                levelup_sound.play()
+            elif score == 6:
+                level = 3
+                meteor_speed_multiplier = 1.6
+                pygame.time.set_timer(meteor_event, 200)
+                level_up_text = f"LEVEL {level}!"
+                level_up_start_time = pygame.time.get_ticks()
+                levelup_sound.play()
             
 def display_score():
-    current_time = pygame.time.get_ticks() // 100
+    current_time_ms = pygame.time.get_ticks()
+    current_time = current_time_ms // 100
     text_surf = font.render(str(current_time), True, (240, 240, 240))
     text_rect = text_surf.get_frect(midbottom = (windowWidth/2, windowHeight -50))
-    display_surface.blit(text_surf, text_rect)
     pygame.draw.rect(display_surface, (240,240,240), text_rect.inflate(20,10).move(0, -8),5, 10)
+
+    stats_text = f'Lvl: {level} | Hits: {score}'
+    stats_surf = font_stats.render(stats_text, True, (240, 240, 240))
+    stats_rect = stats_surf.get_frect(topright = (windowWidth - 20, 20))
+    
+    #levelup message showw
+    if level_up_text and current_time_ms - level_up_start_time < level_up_duration:
+        msg_surf = font_message.render(level_up_text, True, 'yellow')
+        msg_rect = msg_surf.get_frect(center = (windowWidth / 2, windowHeight / 2))
+        
+        display_surface.blit(msg_surf, msg_rect)
+
+    display_surface.blit(stats_surf, stats_rect)
+    display_surface.blit(text_surf, text_rect)
+
+    
 
 
 pygame.init()
@@ -124,6 +158,15 @@ pygame.display.set_caption('Space Blaster')
 running = True
 clock = pygame.Clock()
 
+#score
+score = 0
+level = 1
+meteor_speed_multiplier = 1.0
+
+#levelup message
+level_up_text = ""
+level_up_start_time = 0
+level_up_duration = 2000
 
 #imports -------------------------------------------
 laser_surf = pygame.image.load(join('images', 'laser.png')).convert_alpha()
@@ -131,6 +174,8 @@ meteor_surf = pygame.image.load(join('images', 'meteor.png')).convert_alpha()
 star_surf = pygame.image.load(join('images', 'star.png')).convert_alpha()
 
 font = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 35)
+font_stats = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 25)
+font_message = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 45)
 
 explosion_frames = [pygame.image.load(join('images', 'explosion', f'{i}.png')).convert_alpha() for i in range(21)]
 
@@ -140,6 +185,10 @@ explosion_sound = pygame.mixer.Sound(join('audio', 'explosion.wav'))
 explosion_sound.set_volume(0.5)
 damage_sound = pygame.mixer.Sound(join('audio', 'damage.ogg'))
 damage_sound.set_volume(0.5)
+levelup_sound = pygame.mixer.Sound(join('audio', 'levelup.mp3'))
+levelup_sound.set_volume(1)
+gameover_sound = pygame.mixer.Sound(join('audio', 'gameover.mp3'))
+gameover_sound.set_volume(1)
 game_music = pygame.mixer.Sound(join('audio', 'game_music.wav'))
 game_music.set_volume(0.2)
 game_music.play(loops = -1)
