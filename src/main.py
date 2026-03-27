@@ -33,6 +33,15 @@ class Player(pygame.sprite.Sprite):
         self.direction = self.direction.normalize() if self.direction else self.direction
         self.rect.center += self.direction * self.speed * dt
 
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.right > windowWidth:
+            self.rect.right = windowWidth
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > windowHeight:
+            self.rect.bottom = windowHeight
+
         recent_keys = pygame.key.get_just_released()
         if recent_keys[pygame.K_SPACE] and self.can_shoot:
             Laser(laser_surf, self.rect.midtop, (all_sprites, laser_sprites))
@@ -155,16 +164,16 @@ def display_score():
     display_surface.blit(text_surf, text_rect)
 
 def draw_home_screen():
-    #display_surface.fill('#3a2e3f')
     display_surface.blit(home_bg_surf, (0, 0))
-
-    overlay = pygame.Surface((windowWidth, windowHeight))
-    overlay.set_alpha(100) 
-    overlay.fill('black')
-    display_surface.blit(overlay, (0,0))
 
     hint_surf = font_home.render("P to Start | F to Fire | L for Leaderboard | Q to Quit", True, 'white')
     hint_rect = hint_surf.get_frect(center = (windowWidth/2, 600))
+
+    bg_rect = hint_rect.inflate(40, 20) 
+    bg_surf = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+    bg_surf.fill((0, 0, 0, 150)) 
+    
+    display_surface.blit(bg_surf, bg_rect)
     display_surface.blit(hint_surf, hint_rect)
 
 def draw_game_over():
@@ -254,6 +263,54 @@ def reset_game():
 
     game_music.play(loops=-1)
 
+def handle_home_state(events):
+    global game_state, running
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p:
+                reset_game()
+                game_state = 'game'
+            elif event.key == pygame.K_l:
+                game_state = 'leaderboard'
+            elif event.key == pygame.K_q:
+                running = False
+    draw_home_screen()
+
+def handle_game_state(events, dt):
+    global game_state
+    for event in events:
+        if event.type == meteor_event:
+            x = random.randint(0, windowWidth)
+            y = random.randint(-200, -100)
+            Meteor(meteor_surf, (x, y), (all_sprites, meteor_sprites))
+
+    # Update andd draw
+    all_sprites.update(dt)
+    collision()
+    display_surface.fill('#3a2e3f')
+    all_sprites.draw(display_surface)
+    display_score()
+
+def handle_leaderboard_state(events):
+    global game_state
+    for event in events:
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
+            game_state = 'home'
+    draw_leaderboard()
+
+def handle_gameover_state(events):
+    global game_state
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                reset_game()
+                game_state = 'game'
+            elif event.key == pygame.K_h:
+                game_state = 'home'
+    
+    display_surface.fill('#3a2e3f')
+    all_sprites.draw(display_surface)
+    draw_game_over()
 
 pygame.init()
 windowWidth = 1280
@@ -319,62 +376,25 @@ pygame.time.set_timer(meteor_event, 500)
 
 #Main loop -------------------------------------------
 running = True
+
 while running:
     dt = clock.tick() / 1000
+    events = pygame.event.get()
 
-    for event in pygame.event.get():
+    # Quit Check
+    for event in events:
         if event.type == pygame.QUIT:
             running = False
 
-        #homee
-        if game_state == 'home':
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
-                    reset_game()
-                    score = 0
-                    level = 1
-                    start_time = pygame.time.get_ticks()
-                    meteor_speed_multiplier = 1.0
-                    all_sprites.empty()
-                    meteor_sprites.empty()
-                    laser_sprites.empty()
-                    for i in range(20): Star(all_sprites, star_surf)
-                    player = Player(all_sprites)
-                    game_music.play(loops=-1)
-                    game_state = 'game'
-                elif event.key == pygame.K_l: # Go to leaderboard
-                    game_state = 'leaderboard'
-                elif event.key == pygame.K_q:
-                    running = False
-        elif game_state == 'leaderboard':
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
-                game_state = 'home'
-        elif game_state == 'gameover':
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r: 
-                    reset_game() # Reset and start immediately
-                    game_state = 'game'
-                elif event.key == pygame.K_h: 
-                    game_state = 'home'
-        if game_state == 'game' and event.type == meteor_event:
-            x = random.randint(0, windowWidth)
-            y = random.randint(-200, -100)
-            Meteor(meteor_surf, (x, y), (all_sprites, meteor_sprites))
-
-    if game_state == 'game':
-        all_sprites.update(dt) 
-        collision()
-        display_surface.fill('#3a2e3f')
-        all_sprites.draw(display_surface)
-        display_score()
-    elif game_state == 'home':
-        draw_home_screen()
-    elif game_state == 'leaderboard': 
-        draw_leaderboard()
+    # State Manager
+    if game_state == 'home':
+        handle_home_state(events)
+    elif game_state == 'game':
+        handle_game_state(events, dt)
+    elif game_state == 'leaderboard':
+        handle_leaderboard_state(events)
     elif game_state == 'gameover':
-        display_surface.fill('#3a2e3f')
-        all_sprites.draw(display_surface)
-        draw_game_over()
+        handle_gameover_state(events)
 
     pygame.display.update()
 
