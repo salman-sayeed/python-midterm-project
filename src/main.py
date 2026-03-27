@@ -100,13 +100,15 @@ class AnimatedExplosion(pygame.sprite.Sprite):
             self.kill()
 
 def collision():
-    global game_state, running, score, level, meteor_speed_multiplier, level_up_text, level_up_start_time
+    global start_time, game_state, running, score, level, meteor_speed_multiplier, level_up_text, level_up_start_time
 
     if pygame.sprite.spritecollide(player, meteor_sprites, True, pygame.sprite.collide_mask):
         game_state = 'gameover'
         gameover_sound.play()
         game_music.stop()
-        save_stats(score, level, pygame.time.get_ticks() // 1000)
+        
+        session_time = (pygame.time.get_ticks() - start_time) // 1000
+        save_stats(score, level, session_time)
 
     for laser in laser_sprites:
         collided_sprites = pygame.sprite.spritecollide(laser, meteor_sprites, True)
@@ -132,8 +134,9 @@ def collision():
                 levelup_sound.play()
             
 def display_score():
-    current_time_ms = pygame.time.get_ticks()
+    current_time_ms = pygame.time.get_ticks() - start_time 
     current_time = current_time_ms // 100
+    
     text_surf = font.render(str(current_time), True, (240, 240, 240))
     text_rect = text_surf.get_frect(midbottom = (windowWidth/2, windowHeight -50))
     pygame.draw.rect(display_surface, (240,240,240), text_rect.inflate(20,10).move(0, -8),5, 10)
@@ -153,14 +156,16 @@ def display_score():
     display_surface.blit(text_surf, text_rect)
 
 def draw_home_screen():
-    display_surface.fill('#3a2e3f')
-    title_surf = font_message.render("SPACE BLASTER", True, 'white')
-    title_rect = title_surf.get_frect(center = (windowWidth/2, 200))
-    
-    hint_surf = font.render("Press SPACE to Start", True, 'gray')
-    hint_rect = hint_surf.get_frect(center = (windowWidth/2, 400))
-    
-    display_surface.blit(title_surf, title_rect)
+    #display_surface.fill('#3a2e3f')
+    display_surface.blit(home_bg_surf, (0, 0))
+
+    overlay = pygame.Surface((windowWidth, windowHeight))
+    overlay.set_alpha(100) 
+    overlay.fill('black')
+    display_surface.blit(overlay, (0,0))
+
+    hint_surf = font_home.render("Press P to Start SPACE to Fire", True, 'white')
+    hint_rect = hint_surf.get_frect(center = (windowWidth/2, 600))
     display_surface.blit(hint_surf, hint_rect)
 
 def draw_game_over():
@@ -188,12 +193,13 @@ pygame.init()
 windowWidth = 1280
 windowHeight = 720
 display_surface = pygame.display.set_mode((windowWidth, windowHeight))
-pygame.display.set_caption('Space Blaster')
+pygame.display.set_caption('Space Blaster 2099')
 game_state = 'home'
 #running = True
 clock = pygame.Clock()
 
 #score
+start_time = 0
 score = 0
 level = 1
 meteor_speed_multiplier = 1.0
@@ -204,6 +210,9 @@ level_up_start_time = 0
 level_up_duration = 2000
 
 #imports -------------------------------------------
+home_bg_surf = pygame.image.load(join('images', 'bg.png')).convert() 
+home_bg_surf = pygame.transform.scale(home_bg_surf, (windowWidth, windowHeight))
+
 laser_surf = pygame.image.load(join('images', 'laser.png')).convert_alpha()
 meteor_surf = pygame.image.load(join('images', 'meteor.png')).convert_alpha()
 star_surf = pygame.image.load(join('images', 'star.png')).convert_alpha()
@@ -211,6 +220,7 @@ star_surf = pygame.image.load(join('images', 'star.png')).convert_alpha()
 font = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 35)
 font_stats = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 25)
 font_message = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 45)
+font_home = pygame.font.Font(join('images', 'Oxanium-Bold.ttf'), 45)
 
 explosion_frames = [pygame.image.load(join('images', 'explosion', f'{i}.png')).convert_alpha() for i in range(21)]
 
@@ -218,15 +228,13 @@ laser_sound = pygame.mixer.Sound(join('audio', 'laser.wav'))
 laser_sound.set_volume(0.5)
 explosion_sound = pygame.mixer.Sound(join('audio', 'explosion.wav'))
 explosion_sound.set_volume(0.5)
-damage_sound = pygame.mixer.Sound(join('audio', 'damage.ogg'))
-damage_sound.set_volume(0.5)
 levelup_sound = pygame.mixer.Sound(join('audio', 'levelup.mp3'))
 levelup_sound.set_volume(1)
 gameover_sound = pygame.mixer.Sound(join('audio', 'gameover.mp3'))
 gameover_sound.set_volume(1)
 game_music = pygame.mixer.Sound(join('audio', 'game_music.wav'))
 game_music.set_volume(0.2)
-game_music.play(loops = -1)
+
 
 #sprites -------------------------------------------
 all_sprites = pygame.sprite.Group()
@@ -266,9 +274,10 @@ while running:
 
         #homee
         if game_state == 'home':
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
                 score = 0
                 level = 1
+                start_time = pygame.time.get_ticks()
                 meteor_speed_multiplier = 1.0
                 all_sprites.empty()
                 meteor_sprites.empty()
