@@ -2,6 +2,8 @@ import os
 import pygame
 from os.path import join
 import random
+import json
+
 os.environ['SDL_VIDEO_CENTERED'] = '1'
 
 class Player(pygame.sprite.Sprite):
@@ -98,10 +100,13 @@ class AnimatedExplosion(pygame.sprite.Sprite):
             self.kill()
 
 def collision():
-    global running, score, level, meteor_speed_multiplier, level_up_text, level_up_start_time
-    collision_sprites = pygame.sprite.spritecollide(player, meteor_sprites, True, pygame.sprite.collide_mask)
-    if collision_sprites:
-        running = False
+    global game_state, running, score, level, meteor_speed_multiplier, level_up_text, level_up_start_time
+
+    if pygame.sprite.spritecollide(player, meteor_sprites, True, pygame.sprite.collide_mask):
+        game_state = 'gameover'
+        gameover_sound.play()
+        game_music.stop()
+        save_stats(score, level, pygame.time.get_ticks() // 1000)
 
     for laser in laser_sprites:
         collided_sprites = pygame.sprite.spritecollide(laser, meteor_sprites, True)
@@ -147,15 +152,45 @@ def display_score():
     display_surface.blit(stats_surf, stats_rect)
     display_surface.blit(text_surf, text_rect)
 
+def draw_home_screen():
+    display_surface.fill('#3a2e3f')
+    title_surf = font_message.render("SPACE BLASTER", True, 'white')
+    title_rect = title_surf.get_frect(center = (windowWidth/2, 200))
     
+    hint_surf = font.render("Press SPACE to Start", True, 'gray')
+    hint_rect = hint_surf.get_frect(center = (windowWidth/2, 400))
+    
+    display_surface.blit(title_surf, title_rect)
+    display_surface.blit(hint_surf, hint_rect)
 
+def draw_game_over():
+    overlay = pygame.Surface((windowWidth, windowHeight))
+    overlay.set_alpha(150)
+    overlay.fill('black')
+    display_surface.blit(overlay, (0,0))
+    
+    go_surf = font_message.render("GAME OVER", True, 'red')
+    go_rect = go_surf.get_frect(center = (windowWidth/2, 200))
+    
+    stats_text = f"Score: {score} | Level: {level}"
+    stats_surf = font.render(stats_text, True, 'white')
+    stats_rect = stats_surf.get_frect(center = (windowWidth/2, 350))
+    
+    retry_surf = font.render("Press R to Play Again or H for Home", True, 'gray')
+    retry_rect = retry_surf.get_frect(center = (windowWidth/2, 500))
+    
+    display_surface.blit(go_surf, go_rect)
+    display_surface.blit(stats_surf, stats_rect)
+    display_surface.blit(retry_surf, retry_rect)
+    
 
 pygame.init()
 windowWidth = 1280
 windowHeight = 720
 display_surface = pygame.display.set_mode((windowWidth, windowHeight))
 pygame.display.set_caption('Space Blaster')
-running = True
+game_state = 'home'
+#running = True
 clock = pygame.Clock()
 
 #score
@@ -208,30 +243,67 @@ meteor_event = pygame.event.custom_type()
 pygame.time.set_timer(meteor_event, 500)
 
 
-#Closing window event loop -------------------------------------------
+#Saving Score -------------------------------------------------------------
+def save_stats(final_score, final_level, final_time):
+    data = {
+        'score': final_score,
+        'level': final_level,
+        'time': final_time
+    }
+    with open('highscore.json', 'w') as f:
+        json.dump(data, f)
+
+
+
+#Main loop -------------------------------------------
+running = True
 while running:
     dt = clock.tick() / 1000
 
-    #Closing Loop    
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-        if event.type == meteor_event:
+        #homee
+        if game_state == 'home':
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                score = 0
+                level = 1
+                meteor_speed_multiplier = 1.0
+                all_sprites.empty()
+                meteor_sprites.empty()
+                laser_sprites.empty()
+
+                for i in range(20): Star(all_sprites, star_surf)
+                player = Player(all_sprites)
+                game_music.play(loops=-1)
+                game_state = 'game'
+
+        elif game_state == 'gameover':
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r or event.key == pygame.K_h: 
+                    game_state = 'home'
+
+        if game_state == 'game' and event.type == meteor_event:
             x = random.randint(0, windowWidth)
             y = random.randint(-200, -100)
             Meteor(meteor_surf, (x, y), (all_sprites, meteor_sprites))
-    
-    # updates
-    all_sprites.update(dt) 
-    collision()
 
-    #Drawing the game 
-    display_surface.fill('#3a2e3f')
-    all_sprites.draw(display_surface)
-    display_score()
+    if game_state == 'game':
+        all_sprites.update(dt) 
+        collision()
+        display_surface.fill('#3a2e3f')
+        all_sprites.draw(display_surface)
+        display_score()
+    
+    elif game_state == 'home':
+        draw_home_screen()
+        
+    elif game_state == 'gameover':
+        display_surface.fill('#3a2e3f')
+        all_sprites.draw(display_surface)
+        draw_game_over()
 
     pygame.display.update()
-
 
 pygame.quit()
