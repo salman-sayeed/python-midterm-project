@@ -71,8 +71,7 @@ class Meteor(pygame.sprite.Sprite):
         self.speed = random.randint(400, 500)
         self.rotation_speed = random.randint(40, 80)
         self.rotation = 0
-        base_speed = random.randint(400, 500)
-        self.speed = base_speed * meteor_speed_multiplier
+        self.speed = random.randint(400, 500) * meteor_speed_multiplier
 
     def update(self, dt):
         self.rect.center += self.direction * self.speed *  dt
@@ -164,7 +163,7 @@ def draw_home_screen():
     overlay.fill('black')
     display_surface.blit(overlay, (0,0))
 
-    hint_surf = font_home.render("Press P to Start SPACE to Fire", True, 'white')
+    hint_surf = font_home.render("P to Start | F to Fire | L for Leaderboard | Q to Quit", True, 'white')
     hint_rect = hint_surf.get_frect(center = (windowWidth/2, 600))
     display_surface.blit(hint_surf, hint_rect)
 
@@ -188,6 +187,73 @@ def draw_game_over():
     display_surface.blit(stats_surf, stats_rect)
     display_surface.blit(retry_surf, retry_rect)
     
+def save_stats(final_score, final_level, final_time):
+    filename = 'highscore.json'
+    
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            try:
+                leaderboard = json.load(f)
+            except:
+                leaderboard = []
+    else:
+        leaderboard = []
+
+    new_entry = {'score': final_score, 'level': final_level, 'time': final_time}
+    leaderboard.append(new_entry)
+
+    leaderboard = sorted(leaderboard, key=lambda x: x['score'], reverse=True)[:5]
+
+    with open(filename, 'w') as f:
+        json.dump(leaderboard, f)
+
+def draw_leaderboard():
+    display_surface.blit(home_bg_surf, (0, 0))
+    overlay = pygame.Surface((windowWidth, windowHeight))
+    overlay.set_alpha(200)
+    overlay.fill('black')
+    display_surface.blit(overlay, (0,0))
+
+    title_surf = font_message.render("TOP 5 BLASTERS", True, 'gold')
+    display_surface.blit(title_surf, title_surf.get_frect(center = (windowWidth/2, 100)))
+
+    try:
+        with open('highscore.json', 'r') as f:
+            leaderboard = json.load(f)
+    except:
+        leaderboard = []
+
+    for i, entry in enumerate(leaderboard):
+        y_pos = 200 + (i * 70)
+        txt = f"{i+1}. Score: {entry['score']} | Lvl: {entry['level']} | {entry['time']}s"
+        score_surf = font.render(txt, True, 'white')
+        display_surface.blit(score_surf, score_surf.get_frect(center = (windowWidth/2, y_pos)))
+
+    back_surf = font.render("Press H for Home", True, 'gray')
+    display_surface.blit(back_surf, back_surf.get_frect(center = (windowWidth/2, 650)))
+
+def reset_game():
+    global score, level, start_time, meteor_speed_multiplier, level_up_text
+    score = 0
+    level = 1
+    start_time = pygame.time.get_ticks()
+    meteor_speed_multiplier = 1.0
+    level_up_text = ""
+    
+    #Clear sprites
+    all_sprites.empty()
+    meteor_sprites.empty()
+    laser_sprites.empty()
+    pygame.time.set_timer(meteor_event, 500)
+    
+    # new env creted
+    for i in range(20): 
+        Star(all_sprites, star_surf)
+    global player
+    player = Player(all_sprites)
+
+    game_music.play(loops=-1)
+
 
 pygame.init()
 windowWidth = 1280
@@ -251,18 +317,6 @@ meteor_event = pygame.event.custom_type()
 pygame.time.set_timer(meteor_event, 500)
 
 
-#Saving Score -------------------------------------------------------------
-def save_stats(final_score, final_level, final_time):
-    data = {
-        'score': final_score,
-        'level': final_level,
-        'time': final_time
-    }
-    with open('highscore.json', 'w') as f:
-        json.dump(data, f)
-
-
-
 #Main loop -------------------------------------------
 running = True
 while running:
@@ -274,25 +328,34 @@ while running:
 
         #homee
         if game_state == 'home':
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
-                score = 0
-                level = 1
-                start_time = pygame.time.get_ticks()
-                meteor_speed_multiplier = 1.0
-                all_sprites.empty()
-                meteor_sprites.empty()
-                laser_sprites.empty()
-
-                for i in range(20): Star(all_sprites, star_surf)
-                player = Player(all_sprites)
-                game_music.play(loops=-1)
-                game_state = 'game'
-
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_p:
+                    reset_game()
+                    score = 0
+                    level = 1
+                    start_time = pygame.time.get_ticks()
+                    meteor_speed_multiplier = 1.0
+                    all_sprites.empty()
+                    meteor_sprites.empty()
+                    laser_sprites.empty()
+                    for i in range(20): Star(all_sprites, star_surf)
+                    player = Player(all_sprites)
+                    game_music.play(loops=-1)
+                    game_state = 'game'
+                elif event.key == pygame.K_l: # Go to leaderboard
+                    game_state = 'leaderboard'
+                elif event.key == pygame.K_q:
+                    running = False
+        elif game_state == 'leaderboard':
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
+                game_state = 'home'
         elif game_state == 'gameover':
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r or event.key == pygame.K_h: 
+                if event.key == pygame.K_r: 
+                    reset_game() # Reset and start immediately
+                    game_state = 'game'
+                elif event.key == pygame.K_h: 
                     game_state = 'home'
-
         if game_state == 'game' and event.type == meteor_event:
             x = random.randint(0, windowWidth)
             y = random.randint(-200, -100)
@@ -304,10 +367,10 @@ while running:
         display_surface.fill('#3a2e3f')
         all_sprites.draw(display_surface)
         display_score()
-    
     elif game_state == 'home':
         draw_home_screen()
-        
+    elif game_state == 'leaderboard': 
+        draw_leaderboard()
     elif game_state == 'gameover':
         display_surface.fill('#3a2e3f')
         all_sprites.draw(display_surface)
